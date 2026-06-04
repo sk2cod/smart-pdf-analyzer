@@ -1,0 +1,38 @@
+# ============================================================
+# Smart PDF Analyzer — Dependencies
+# ============================================================
+
+# --- Core Framework ---
+streamlit==1.38.0
+python-dotenv==1.0.1
+
+# --- LangChain Stack ---
+# Versions unpinned to let pip resolve compatibility
+langchain>=0.3.7
+langchain-openai>=0.2.9
+langchain-community>=0.3.7
+langchain-core>=0.3.17
+
+# --- OpenAI ---
+openai>=1.54.3
+
+# --- PDF Processing ---
+pymupdf==1.24.11
+pdfplumber==0.11.4
+Pillow==10.4.0
+
+# --- Vector Store ---
+faiss-cpu==1.9.0
+
+# --- Embeddings & Reranking ---
+sentence-transformers==3.2.1
+
+# --- Output Parsing ---
+pydantic>=2.9.2
+
+# --- LangSmith (observability) ---
+langsmith>=0.1.143
+
+# --- Utilities ---
+tiktoken>=0.8.0
+numpy==1.26.4
