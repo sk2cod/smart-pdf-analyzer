@@ -103,6 +103,53 @@ def render_extraction_tab() -> None:
                 format_extraction_result(raw_result)
             )
 
+            # Track extraction costs
+            from utils.cost_tracker import add_cost_entry
+            token_log = st.session_state.get(
+                "session_token_log", []
+            )
+            pages = raw_result.get("pages_processed", 1)
+            vision_pages = raw_result.get("vision_pages", 0)
+            text_pages = pages - vision_pages
+
+            # Classification call
+            add_cost_entry(
+                token_log=token_log,
+                operation="document_classification",
+                model="gpt-4o-mini",
+                input_tokens=500,
+                output_tokens=10,
+                actual_calls=1,
+            )
+
+            # Text extraction calls
+            if text_pages > 0:
+                add_cost_entry(
+                    token_log=token_log,
+                    operation="text_extraction",
+                    model="gpt-4o-mini",
+                    input_tokens=text_pages * 1000,
+                    output_tokens=text_pages * 300,
+                    actual_calls=text_pages,
+                )
+
+            # Vision extraction calls
+            if vision_pages > 0:
+                vision_model = (
+                    "gpt-4o" if use_enhanced else "gpt-4o-mini"
+                )
+                add_cost_entry(
+                    token_log=token_log,
+                    operation="vision_extraction",
+                    model=vision_model,
+                    input_tokens=vision_pages * 1500,
+                    output_tokens=vision_pages * 400,
+                    actual_calls=vision_pages,
+                )
+
+            st.session_state["session_token_log"] = token_log
+            st.rerun()
+
     # ── Results Display ──────────────────────────────────────
     result = st.session_state.get("extraction_result")
 

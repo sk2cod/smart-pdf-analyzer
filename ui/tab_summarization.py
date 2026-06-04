@@ -1,10 +1,6 @@
 # ============================================================
 # ui/tab_summarization.py
 # ============================================================
-# Renders the Summarization tab (Mode 2).
-# Pure renderer — calls modes/summarization.py and displays
-# results. No business logic lives here.
-# ============================================================
 
 import streamlit as st
 from modes.summarization import run_summarization
@@ -16,18 +12,16 @@ from config import (
     SUMMARY_DEFAULT_WORDS,
 )
 
+COST_GATE_THRESHOLD = 40
+
 
 def render_summarization_tab() -> None:
-    """
-    Renders the complete summarization tab UI.
-    """
     st.markdown("### 📝 Summarization")
     st.caption(
         "Generate structured summaries with custom "
         "length and format controls."
     )
 
-    # Guard — require processed documents
     if not st.session_state.get("ingestion_complete"):
         st.info(
             "👈 Upload and process your documents using "
@@ -42,7 +36,6 @@ def render_summarization_tab() -> None:
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        # Source document selector
         source_option = st.radio(
             "Source",
             options=["All documents"] + filenames,
@@ -50,7 +43,6 @@ def render_summarization_tab() -> None:
         )
 
     with col2:
-        # Output format selector
         output_format = st.selectbox(
             "Output format",
             options=list(SUMMARY_FORMATS.keys()),
@@ -58,7 +50,6 @@ def render_summarization_tab() -> None:
             index=0,
         )
 
-    # Word limit slider
     max_words = st.slider(
         "Maximum length (words)",
         min_value=SUMMARY_MIN_WORDS,
@@ -70,118 +61,205 @@ def render_summarization_tab() -> None:
     )
     st.session_state["summary_max_words"] = max_words
 
-    # Optional focus instruction
     focus_instruction = st.text_input(
         "Focus instruction (optional)",
         placeholder=(
             "e.g. Focus on financial figures and risk factors only"
         ),
-        help=(
-            "Tell the summarizer what to prioritize. "
-            "Leave blank for a general summary."
-        ),
     )
 
-    # ── Summarize Button ─────────────────────────────────────
-    summarize_clicked = st.button(
+    # Filter chunks by source selection
+    if source_option == "All documents":
+        target_chunks = chunks
+    else:
+        target_chunks = [
+            c for c in chunks
+            if c.metadata.get("source_filename") == source_option
+        ]
+
+    chunk_count = len(target_chunks)
+    needs_confirmation = chunk_count > COST_GATE_THRESHOLD
+
+    # ── Generate Button ───────────────────────────────────────
+    generate_clicked = st.button(
         "⚡ Generate Summary",
         type="primary",
     )
 
-    if summarize_clicked:
-        # Filter chunks by selected source
-        if source_option == "All documents":
-            target_chunks = chunks
+    # ── Cost Gate ─────────────────────────────────────────────
+    if generate_clicked:
+        if needs_confirmation:
+            st.session_state["summary_awaiting_confirmation"] = True
+            st.session_state["summary_pending_chunks"] = chunk_count
         else:
-            target_chunks = [
-                c for c in chunks
-                if c.metadata.get("source_filename") == source_option
-            ]
-
-        if not target_chunks:
-            st.error("No content found for the selected document.")
-            return
-
-        # Reset confirmed cost flag for new run
-        st.session_state["summary_confirmed_cost"] = False
-
-        with st.spinner("Analyzing document structure..."):
-            raw_result = run_summarization(
-                chunks=target_chunks,
+            _run_and_store(
+                target_chunks=target_chunks,
+                chunk_count=chunk_count,
                 max_words=max_words,
                 output_format=output_format,
                 focus_instruction=focus_instruction,
             )
-            st.session_state["summary_result"] = (
-                format_summary_result(raw_result)
-            )
 
-    # ── Cost Gate Confirmation ───────────────────────────────
-    result = st.session_state.get("summary_result")
-
-    if result and result.get("needs_cost_confirmation"):
-        est_calls = result.get("estimated_map_calls", 0)
+    if st.session_state.get("summary_awaiting_confirmation"):
+        pending = st.session_state.get("summary_pending_chunks", 0)
         st.warning(
-            f"⚠️ This document has {est_calls} chunks. "
-            f"Summarization will make {est_calls} API calls. "
-            f"Do you want to proceed?"
+            f"⚠️ This document has {pending} chunks. "
+            f"Summarization will make {pending} cheap model calls "
+            f"+ 1 premium model call. "
+            f"Estimated cost: ${(pending * 0.0002) + 0.03:.3f}"
         )
         col_yes, col_no = st.columns([1, 3])
         with col_yes:
             if st.button("✅ Yes, proceed", type="primary"):
-                st.session_state["summary_confirmed_cost"] = True
-                target_chunks = (
-                    chunks if source_option == "All documents"
-                    else [
-                        c for c in chunks
-                        if c.metadata.get("source_filename")
-                        == source_option
-                    ]
+                st.session_state["summary_awaiting_confirmation"] = False
+                _run_and_store(
+                    target_chunks=target_chunks,
+                    chunk_count=chunk_count,
+                    max_words=max_words,
+                    output_format=output_format,
+                    focus_instruction=focus_instruction,
                 )
-                with st.spinner("Generating summary..."):
-                    raw_result = run_summarization(
-                        chunks=target_chunks,
-                        max_words=max_words,
-                        output_format=output_format,
-                        focus_instruction=focus_instruction,
-                    )
-                    # Force bypass cost gate on confirmed run
-                    from config import SUMMARIZATION_COST_GATE_CHUNKS
-                    st.session_state["summary_result"] = (
-                        format_summary_result(raw_result)
-                    )
         with col_no:
             if st.button("❌ Cancel"):
-                st.session_state["summary_result"] = None
+                st.session_state["summary_awaiting_confirmation"] = False
+                st.rerun()
         return
 
-    # ── Results Display ──────────────────────────────────────
-    if result and result.get("summary"):
-        st.divider()
+    # ── Results Display ───────────────────────────────────────
+    _render_result(st.session_state.get("summary_result"))
 
-        # Meta information
-        col_meta, col_export = st.columns([3, 1])
-        with col_meta:
-            st.caption(result["meta_label"])
 
-        # Warnings
-        for warning in result.get("warnings", []):
-            st.warning(warning)
+def _run_and_store(
+    target_chunks: list,
+    chunk_count: int,
+    max_words: int,
+    output_format: str,
+    focus_instruction: str,
+) -> None:
+    """
+    Runs summarization with map stage caching.
+    If map cache exists for current document set,
+    skips map stage and only re-runs synthesis.
+    """
+    current_fingerprint = st.session_state.get(
+        "uploaded_files_fingerprint", ""
+    )
+    cached_fingerprint = st.session_state.get(
+        "map_cache_fingerprint", ""
+    )
+    cached_map = st.session_state.get("map_cache_compressed", None)
 
-        # Render summary
-        fmt = result.get("output_format", "bullet_hierarchy")
+    # Use cached map results if same document set
+    use_cache = (
+        cached_map is not None
+        and cached_fingerprint == current_fingerprint
+        and len(cached_map) == chunk_count
+    )
 
-        if fmt in ("mermaid_flowchart", "mermaid_mindmap"):
-            # Streamlit renders Mermaid in markdown code blocks
-            st.markdown(result["summary"])
-        else:
-            st.markdown(result["summary"])
-
-        # Export as text
-        with col_export:
-            st.download_button(
-                label="📥 Export",
-                data=result["summary"],
-                file_name="summary.md",
-                mime="text/markdown",
+    if use_cache:
+        with st.spinner(
+            "Re-synthesizing with new settings "
+            "(map stage cached — synthesis only)..."
+        ):
+            from modes.summarization import (
+                _run_synthesis_stage,
+                FORMAT_INSTRUCTIONS,
             )
+            from prompts.summarization_prompts import FORMAT_INSTRUCTIONS
+            summary = _run_synthesis_stage(
+                compressed_summaries=cached_map,
+                max_words=max_words,
+                output_format=output_format,
+                focus_instruction=focus_instruction,
+            )
+            word_count = len(summary.split())
+            raw_result = {
+                "summary": summary,
+                "word_count": word_count,
+                "chunks_processed": chunk_count,
+                "output_format": output_format,
+                "needs_cost_confirmation": False,
+                "estimated_map_calls": 0,
+                "warnings": ["Map stage used cached results."],
+            }
+    else:
+        with st.spinner(
+            f"Summarizing {chunk_count} chunks... "
+            f"This may take a few minutes."
+        ):
+            from modes.summarization import _run_map_stage
+            compressed = _run_map_stage(target_chunks)
+
+            # Cache map results for this document set
+            st.session_state["map_cache_compressed"] = compressed
+            st.session_state["map_cache_fingerprint"] = (
+                current_fingerprint
+            )
+
+            from modes.summarization import _run_synthesis_stage
+            summary = _run_synthesis_stage(
+                compressed_summaries=compressed,
+                max_words=max_words,
+                output_format=output_format,
+                focus_instruction=focus_instruction,
+            )
+            word_count = len(summary.split())
+            raw_result = {
+                "summary": summary,
+                "word_count": word_count,
+                "chunks_processed": chunk_count,
+                "output_format": output_format,
+                "needs_cost_confirmation": False,
+                "estimated_map_calls": chunk_count,
+                "warnings": [],
+            }
+
+    st.session_state["summary_result"] = (
+        format_summary_result(raw_result)
+    )
+
+    # Update cost tracker
+    from utils.cost_tracker import add_cost_entry
+    token_log = st.session_state.get("session_token_log", [])
+    if not use_cache:
+        add_cost_entry(
+            token_log=token_log,
+            operation="summarization_map",
+            model="gpt-4o-mini",
+            input_tokens=chunk_count * 800,
+            output_tokens=chunk_count * 200,
+            actual_calls=chunk_count,
+        )
+    add_cost_entry(
+        token_log=token_log,
+        operation="summarization_synthesis",
+        model="gpt-4o",
+        input_tokens=8000,
+        output_tokens=600,
+    )
+    st.session_state["session_token_log"] = token_log
+
+
+def _render_result(result: dict) -> None:
+    """Renders the summary result if available."""
+    if not result or not result.get("summary"):
+        return
+
+    st.divider()
+
+    col_meta, col_export = st.columns([3, 1])
+    with col_meta:
+        st.caption(result["meta_label"])
+
+    for warning in result.get("warnings", []):
+        st.warning(warning)
+
+    st.markdown(result["summary"])
+
+    with col_export:
+        st.download_button(
+            label="📥 Export",
+            data=result["summary"],
+            file_name="summary.md",
+            mime="text/markdown",
+        )

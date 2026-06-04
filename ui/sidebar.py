@@ -130,13 +130,22 @@ def render_sidebar() -> None:
             display = format_cost_display(token_log)
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("API Calls", display["total_calls"])
+                st.metric(
+                    "Operations",
+                    display["total_operations"]
+                )
             with col2:
                 st.metric("Est. Cost", display["total_cost"])
             st.caption(
-                f"Input tokens: {display['input_tokens']} · "
-                f"Output tokens: {display['output_tokens']}"
+                f"Total API calls: {display['total_actual_calls']}"
             )
+            st.caption(
+                f"Input: {display['input_tokens']} tokens · "
+                f"Output: {display['output_tokens']} tokens"
+            )
+            with st.expander("breakdown"):
+                for line in display["breakdown"]:
+                    st.caption(f"· {line}")
         else:
             st.caption("No API calls yet this session.")
 

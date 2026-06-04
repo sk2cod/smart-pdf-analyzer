@@ -109,12 +109,18 @@ def extract_from_image(
     # Build vision message with base64 encoded image
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Get system message from prompt template
-    system_message = VISION_EXTRACTION_PROMPT.messages[0].format(
-        document_type=document_type
-    )
-    human_text = VISION_EXTRACTION_PROMPT.messages[1].format(
-        document_type=document_type
+    # Build system prompt as plain string
+    from langchain_core.messages import SystemMessage
+
+    system_text = VISION_EXTRACTION_PROMPT.messages[0].prompt.template
+
+    # Build human text as plain string
+    human_text = (
+        f"Extract all visible data fields from this document image.\n\n"
+        f"Document type context: {document_type}\n\n"
+        f"Identify every discrete field you can see. "
+        f"Do not use a fixed template. "
+        f"Discover the schema from what is visible in the image."
     )
 
     # Build multimodal message with image
@@ -135,7 +141,7 @@ def extract_from_image(
     )
 
     result = model.invoke([
-        system_message,
+        SystemMessage(content=system_text),
         vision_message,
     ])
 

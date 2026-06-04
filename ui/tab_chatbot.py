@@ -127,6 +127,16 @@ def render_chatbot_tab() -> None:
             "content": response["answer"],
             "sources": response["sources"],
         })
-
+        # Track cost for this chat turn
+        from utils.cost_tracker import add_cost_entry
+        token_log = st.session_state.get("session_token_log", [])
+        add_cost_entry(
+            token_log=token_log,
+            operation="chat_question",
+            model="gpt-4o-mini",
+            input_tokens=2000,
+            output_tokens=500,
+            actual_calls=1,
+        )
         # Update session state
         st.session_state["chat_history"] = chat_history

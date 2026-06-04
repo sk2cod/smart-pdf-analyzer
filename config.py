@@ -95,7 +95,7 @@ TABLE_CHUNK_SIZE: int = 1200
 
 # Minimum character count to consider a page as text-based
 # Below this threshold → route to vision extraction path
-TEXT_CONTENT_THRESHOLD: int = 100
+TEXT_CONTENT_THRESHOLD: int = 50
 
 # ------------------------------------------------------------
 # Vision / Image Quality Thresholds
