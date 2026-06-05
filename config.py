@@ -179,9 +179,10 @@ COST_PER_1K_OUTPUT = {
 SUMMARY_FORMATS: dict = {
     "bullet_hierarchy":  "structured bullet points with hierarchy",
     "executive_prose":   "executive summary in flowing prose",
-    "mermaid_flowchart": "Mermaid flowchart diagram code only",
-    "mermaid_mindmap":   "Mermaid mindmap diagram code only",
+    "mermaid_flowchart": "Mermaid flowchart diagram",
+    "mermaid_mindmap":   "Mermaid mindmap diagram",
     "comparison_table":  "markdown comparison table",
+    "analyst_insight":   "Analyst Insight",
 }
 
 # ------------------------------------------------------------
