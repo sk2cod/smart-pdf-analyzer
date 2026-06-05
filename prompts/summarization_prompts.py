@@ -1,18 +1,11 @@
 # ============================================================
 # prompts/summarization_prompts.py
 # ============================================================
-# All prompt templates for Mode 2: Summarization.
-# To change output style, add new formats, or adjust
-# the synthesis tone — edit this file only.
-# Nothing in modes/summarization.py needs to change.
-# ============================================================
 
 from langchain_core.prompts import ChatPromptTemplate
 
 # ------------------------------------------------------------
 # Map Stage Prompt (Cheap Model)
-# Compresses individual chunks into dense bullet summaries
-# Called once per chunk — must be efficient and focused
 # ------------------------------------------------------------
 
 MAP_SYSTEM = """You are a document compression engine.
@@ -37,8 +30,6 @@ MAP_PROMPT = ChatPromptTemplate.from_messages([
 
 # ------------------------------------------------------------
 # Synthesis Stage Prompt (Premium Model)
-# Takes all compressed chunk summaries and produces
-# the final output in the user-requested format
 # ------------------------------------------------------------
 
 SYNTHESIS_SYSTEM = """You are an expert document analyst and writer.
@@ -71,8 +62,6 @@ SYNTHESIS_PROMPT = ChatPromptTemplate.from_messages([
 
 # ------------------------------------------------------------
 # Format Instructions
-# Injected into SYNTHESIS_SYSTEM as {output_format_instruction}
-# Add new formats here — nothing else needs to change
 # ------------------------------------------------------------
 
 FORMAT_INSTRUCTIONS = {
@@ -90,30 +79,49 @@ FORMAT_INSTRUCTIONS = {
 - Professional formal tone throughout
 - No bullet points or headers""",
 
-    "mermaid_flowchart": """A valid Mermaid flowchart diagram.
-Output the Mermaid code block only — no prose before or after.
-Use this exact format:
-```mermaid
-flowchart TD
-    A[Start] --> B[Step]
-```
-Nodes must have short labels (max 5 words).
-Use TD (top-down) direction.
-Maximum 12 nodes for readability.""",
+    "mermaid_flowchart": """STRICT MERMAID FLOWCHART OUTPUT RULES — YOU MUST FOLLOW EXACTLY:
 
-    "mermaid_mindmap": """A valid Mermaid mindmap diagram.
-Output the Mermaid code block only — no prose before or after.
-Use this exact format:
-```mermaid
+1. Output ONLY raw Mermaid code. No prose, no explanation, no markdown fences.
+2. First line MUST be exactly: flowchart TD
+3. Every node label MUST be wrapped in square brackets or parentheses: A[Label] or A(Label)
+4. Node labels MUST be 4 words or fewer. No colons, no quotes, no special characters.
+5. Use only alphanumeric node IDs: A, B, C or A1, B1 etc.
+6. Maximum 10 nodes total.
+7. Every line must be a valid connection: A --> B or A --> B --> C
+
+CORRECT example output (output exactly like this, nothing else):
+flowchart TD
+    A[Petition Filed] --> B[Court Hearing]
+    B --> C[Arguments Made]
+    C --> D[Decision Issued]
+    D --> E[Order Enforced]
+
+OUTPUT ONLY THE FLOWCHART CODE. NOTHING ELSE.""",
+
+    "mermaid_mindmap": """STRICT MERMAID MINDMAP OUTPUT RULES — YOU MUST FOLLOW EXACTLY:
+
+1. Output ONLY raw Mermaid code. No prose, no explanation, no markdown fences.
+2. First line MUST be exactly: mindmap
+3. Second line MUST be: (two spaces)root((Short Title)) — max 3 words in root
+4. Each child node is indented with 4 spaces. Each grandchild with 6 spaces.
+5. Node text MUST be 4 words or fewer. No colons, no special characters, no brackets.
+6. Maximum 5 branches from root. Maximum 3 sub-items per branch.
+7. Maximum 3 levels of nesting total.
+
+CORRECT example output (output exactly like this, nothing else):
 mindmap
-  root((Document Title))
-    Topic 1
-      Detail
-    Topic 2
-      Detail
-```
-Maximum 3 levels of nesting.
-Maximum 5 branches from root.""",
+  root((Case Summary))
+    Parties
+      Petitioner Society
+      State Respondent
+    Key Issue
+      Limitation Period
+      Fee Recovery
+    Court Decision
+      Petition Dismissed
+      Guarantee Honored
+
+OUTPUT ONLY THE MINDMAP CODE. NOTHING ELSE.""",
 
     "comparison_table": """A markdown comparison table.
 Identify the key dimensions being compared in the document.

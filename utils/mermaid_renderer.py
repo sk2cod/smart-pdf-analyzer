@@ -1,75 +1,54 @@
 # ============================================================
 # utils/mermaid_renderer.py
 # ============================================================
-# Renders Mermaid diagram code as a live visual inside
-# Streamlit using st.components.v1.html + Mermaid JS CDN.
-#
-# Usage:
-#   from utils.mermaid_renderer import render_mermaid, extract_mermaid_code
-#
-#   code = extract_mermaid_code(llm_output)   # strips fences
-#   render_mermaid(code)                      # renders diagram
-# ============================================================
 
 import re
 import streamlit as st
 import streamlit.components.v1 as components
 
 
-# ------------------------------------------------------------
-# Code Extraction
-# Strips markdown fences the LLM may have added.
-# Handles: ```mermaid ... ```, ``` ... ```, or bare code.
-# ------------------------------------------------------------
-
 def extract_mermaid_code(raw: str) -> str:
     """
     Extract clean Mermaid code from LLM output.
 
-    The LLM sometimes wraps output in markdown fences even when
-    the prompt says not to. This strips them reliably.
-
-    Args:
-        raw: Raw string from LLM, possibly fenced.
-
-    Returns:
-        Clean Mermaid code string ready for rendering.
+    Strategy (in order):
+    1. Look for ```mermaid ... ``` fenced block — most reliable
+    2. Look for bare ``` ... ``` block
+    3. Look for a line starting with flowchart/graph/mindmap
+       and take everything from there — handles unfenced output
+    4. Return empty string if nothing found
     """
-    # Match ```mermaid ... ``` or ``` ... ```
-    fence_pattern = re.compile(
-        r"```(?:mermaid)?\s*\n?(.*?)```",
+    # Strategy 1: fenced ```mermaid block
+    fenced = re.search(
+        r"```mermaid\s*\n(.*?)```",
+        raw,
         re.DOTALL | re.IGNORECASE,
     )
-    match = fence_pattern.search(raw)
-    if match:
-        return match.group(1).strip()
+    if fenced:
+        return fenced.group(1).strip()
 
-    # No fences — return as-is (already clean)
-    return raw.strip()
+    # Strategy 2: generic ``` block
+    generic = re.search(r"```\s*\n(.*?)```", raw, re.DOTALL)
+    if generic:
+        candidate = generic.group(1).strip()
+        first = candidate.splitlines()[0].lower()
+        if any(k in first for k in ("flowchart", "graph", "mindmap")):
+            return candidate
 
+    # Strategy 3: find diagram keyword line and take from there
+    lines = raw.splitlines()
+    for i, line in enumerate(lines):
+        stripped = line.strip().lower()
+        if stripped.startswith(("flowchart", "graph td", "graph lr", "mindmap")):
+            return "\n".join(lines[i:]).strip()
 
-# ------------------------------------------------------------
-# Mermaid Renderer
-# Injects Mermaid JS via CDN into an HTML component.
-# The diagram replaces the code block entirely (per spec).
-# ------------------------------------------------------------
+    return ""
+
 
 def render_mermaid(mermaid_code: str, height: int = 500) -> None:
     """
     Render a Mermaid diagram live inside Streamlit.
-
-    Injects the Mermaid JS library via CDN into an HTML
-    component and renders the diagram inline — no external
-    tool or copy-paste required.
-
-    Args:
-        mermaid_code: Clean Mermaid syntax string.
-        height:       Height in pixels for the HTML component.
-                      Flowcharts typically need 400-600px.
-                      Mindmaps may need 500-700px.
     """
-    escaped = mermaid_code.replace("`", "&#96;").replace("\\", "\\\\")
-
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -107,9 +86,7 @@ def render_mermaid(mermaid_code: str, height: int = 500) -> None:
     </head>
     <body>
       <div class="mermaid-wrapper">
-        <div class="mermaid" id="mermaid-diagram">
-{mermaid_code}
-        </div>
+        <pre class="mermaid" id="mermaid-diagram">{mermaid_code}</pre>
       </div>
       <div id="error-box"></div>
 
@@ -127,12 +104,12 @@ def render_mermaid(mermaid_code: str, height: int = 500) -> None:
           const code = el.innerText.trim();
           try {{
             const {{ svg }} = await mermaid.render('rendered-diagram', code);
-            el.innerHTML = svg;
+            el.outerHTML = svg;
           }} catch (err) {{
             const errBox = document.getElementById('error-box');
             errBox.style.display = 'block';
-            errBox.textContent = 'Diagram render error: ' + err.message + '\\n\\nMermaid code:\\n' + code;
-            el.innerHTML = '';
+            errBox.textContent = 'Render error: ' + err.message;
+            el.style.display = 'none';
           }}
         }}
 
@@ -141,36 +118,14 @@ def render_mermaid(mermaid_code: str, height: int = 500) -> None:
     </body>
     </html>
     """
-
     components.html(html, height=height, scrolling=True)
 
 
-# ------------------------------------------------------------
-# Auto-height helper
-# Estimates a sensible height based on diagram type and
-# number of lines in the code, so caller doesn't have to guess.
-# ------------------------------------------------------------
-
 def estimate_height(mermaid_code: str) -> int:
-    """
-    Estimate a sensible component height for the diagram.
-
-    Args:
-        mermaid_code: Clean Mermaid code string.
-
-    Returns:
-        Height in pixels.
-    """
     lines = mermaid_code.strip().splitlines()
     line_count = len(lines)
     first_line = lines[0].lower() if lines else ""
 
-    # Mindmaps tend to be wider/taller than flowcharts
-    if "mindmap" in first_line:
-        base = 500
-    else:
-        base = 420
-
-    # Add headroom for larger diagrams
+    base = 500 if "mindmap" in first_line else 420
     extra = max(0, (line_count - 10) * 18)
-    return min(base + extra, 900)   # cap at 900px
+    return min(base + extra, 900)
