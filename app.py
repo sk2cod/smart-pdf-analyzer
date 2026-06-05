@@ -39,6 +39,55 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------
+# Custom CSS
+# Injected once at startup.
+# Controls tab styling, title centering, and hides the
+# secrets.toml error banner shown in local development.
+# ------------------------------------------------------------
+
+def _inject_custom_css() -> None:
+    st.markdown("""
+    <style>
+    /* ── Hide secrets.toml error banner ── */
+    div[data-testid="stAlert"] > div[role="alert"] {
+        display: none;
+    }
+
+    /* ── Centre and enlarge tab labels ── */
+    .stTabs [data-baseweb="tab-list"] {
+        justify-content: center;
+        gap: 24px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-size: 1.1rem;
+        font-weight: 600;
+        padding: 12px 40px;
+    }
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: #FF4B4B;
+    }
+
+    /* ── Centre main title and subtitle ── */
+    h1 {
+        text-align: center;
+    }
+    div[data-testid="stCaptionContainer"] p {
+        text-align: center;
+        font-size: 1rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.6;
+    }
+
+    /* ── Add breathing room inside tab content ── */
+    div[data-testid="stTabContent"] {
+        padding: 2rem 3rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# ------------------------------------------------------------
 # Session State Initialisation
 # All keys initialised here exactly once.
 # Subsequent reruns skip keys that already exist.
@@ -95,6 +144,7 @@ def main() -> None:
     """
     load_secrets()
     _init_session_state()
+    _inject_custom_css()
 
     # Page header
     st.title(f"{APP_ICON} {APP_TITLE}")
