@@ -107,13 +107,17 @@ Create a `.env` file in the project root:
 
 ## 💰 Estimated Costs
 
-| Operation | Approx Cost |
-|-----------|-------------|
-| Process 3 PDFs (embedding) | ~$0.001 |
-| Extract fields from invoice | ~$0.001 |
-| Summarize 10-page document | ~$0.008 |
-| Summarize full book (258 chunks) | ~$0.088 |
-| 10 chat questions | ~$0.003 |
+| Operation | Approx Cost | Notes |
+|-----------|-------------|-------|
+| Process PDFs (embedding) | ~$0.001 | Per document set |
+| Document classification | ~$0.0001 | Per document |
+| Extract fields (text PDF) | ~$0.0003 | Per document |
+| Extract fields (scanned/vision) | ~$0.008 | Per document |
+| Summarize 10-page doc (10 chunks) | ~$0.028 | Map + synthesis |
+| Summarize 25-page doc (25 chunks) | ~$0.032 | Map + synthesis |
+| Summarize large doc (50+ chunks) | ~$0.050+ | Map + synthesis |
+| Chat question | ~$0.0006 | Per question |
+| Analyst Insight format | ~$0.030 | Synthesis only if cached |
 
 ---
 
